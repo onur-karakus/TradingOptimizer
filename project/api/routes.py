@@ -1,137 +1,82 @@
-# project/api/routes.py
-# Tüm API endpoint'lerini içeren Blueprint.
+from flask import Blueprint, jsonify, request
+from data_fetcher import get_klines
+from ..models import Kline
+from ..db import db
 
-import requests
-from flask import Blueprint, jsonify, request, current_app
-from project.db import get_db
-import time
-from datetime import datetime
+api = Blueprint('api', __name__)
 
-api_bp = Blueprint('api', __name__)
-
-# --- YENİ YARDIMCI FONKSİYON ---
-def _fetch_and_store_initial_data(symbol, interval, db):
+@api.route('/klines')
+def klines_endpoint():
     """
-    Belirli bir sembol/zaman aralığı için veritabanında veri yoksa,
-    Binance'ten tarihsel veriyi çeker ve veritabanına kaydeder.
+    Grafik verilerini önbellekleme mekanizmasıyla sunar.
+    Önce veritabanını kontrol eder, eksik verileri API'den çeker,
+    veritabanını günceller ve sonucu veritabanından gönderir.
     """
-    print(f"'{symbol}-{interval}' için veritabanında veri bulunamadı. Otomatik veri çekme başlatılıyor...")
-    
-    try:
-        # Binance API'den çekilebilecek maksimum mum sayısını çekelim.
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=1500"
-        response = requests.get(url, timeout=15) # Zaman aşımını biraz artıralım
-        response.raise_for_status()
-        klines = response.json()
-
-        if not klines:
-            print(f"'{symbol}-{interval}' için API'den veri alınamadı.")
-            return False
-
-        data_to_insert = [
-            (symbol, interval, k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])) 
-            for k in klines
-        ]
-
-        cursor = db.cursor()
-        cursor.executemany(
-            "INSERT OR IGNORE INTO klines (symbol, interval, open_time, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            data_to_insert
-        )
-        db.commit()
-        
-        start_date = datetime.fromtimestamp(klines[0][0]/1000)
-        end_date = datetime.fromtimestamp(klines[-1][0]/1000)
-        print(f"Otomatik çekme başarılı: {len(klines)} mum eklendi. ({start_date} -> {end_date})")
-        return True
-
-    except requests.exceptions.RequestException as e:
-        print(f"Otomatik veri çekme sırasında API hatası: {e}")
-        return False
-    except Exception as e:
-        print(f"Otomatik veri çekme sırasında beklenmedik bir hata: {e}")
-        return False
-
-
-@api_bp.route('/data')
-def get_kline_data():
-    """Veritabanından mum verilerini çeker. Veri yoksa, otomatik olarak çeker."""
     symbol = request.args.get('symbol', 'BTCUSDT').upper()
     interval = request.args.get('interval', '1h')
+    limit = int(request.args.get('limit', '1000'))
 
-    if symbol not in current_app.config['ALLOWED_SYMBOLS'] or \
-       interval not in current_app.config['ALLOWED_INTERVALS']:
-        return jsonify({"error": "Geçersiz sembol veya zaman aralığı"}), 400
+    # 1. Adım: Veritabanındaki en son veriyi bul.
+    last_kline = Kline.query.filter_by(symbol=symbol, interval=interval).order_by(Kline.open_time.desc()).first()
+    
+    start_time = None
+    if last_kline:
+        # Eğer veritabanında veri varsa, sadece eksik olan yeni verileri çekmek için
+        # başlangıç zamanını son verinin zamanı olarak ayarla.
+        start_time = last_kline.open_time
 
-    db = get_db()
-    cursor = db.cursor()
-    
-    # Veritabanından veriyi çekmeyi dene
-    cursor.execute(
-        """
-        SELECT open_time, open, high, low, close, volume 
-        FROM klines 
-        WHERE symbol = ? AND interval = ? 
-        ORDER BY open_time ASC
-        """,
-        (symbol, interval)
-    )
-    rows = cursor.fetchall()
-    
-    # --- ANA DÜZELTME: OTOMATİK VERİ ÇEKME MANTIĞI ---
-    # Eğer veritabanında bu zaman aralığı için hiç veri yoksa...
-    if not rows:
-        # Veriyi çek, kaydet ve başarılı olursa tekrar sorgula.
-        if _fetch_and_store_initial_data(symbol, interval, db):
-            cursor.execute(
-                "SELECT open_time, open, high, low, close, volume FROM klines WHERE symbol = ? AND interval = ? ORDER BY open_time ASC",
-                (symbol, interval)
+    # 2. Adım: API'den yeni verileri çek.
+    new_klines_data = get_klines(symbol=symbol, interval=interval, startTime=start_time, limit=limit)
+
+    # 3. Adım: Gelen yeni verileri veritabanına kaydet.
+    if new_klines_data:
+        # Hızlı kontrol için veritabanındaki mevcut zaman damgalarını bir sete al.
+        # Bu, gereksiz veritabanı sorgularını önler ve performansı artırır.
+        query_start_time = new_klines_data[0][0]
+        existing_times = {
+            t[0] for t in db.session.query(Kline.open_time).filter(
+                Kline.symbol == symbol,
+                Kline.interval == interval,
+                Kline.open_time >= query_start_time
+            ).all()
+        }
+        
+        # Sadece veritabanında olmayan yeni mumları listeye ekle.
+        kline_objects = [
+            Kline(
+                symbol=symbol,
+                interval=interval,
+                open_time=k[0],
+                open=k[1],
+                high=k[2],
+                low=k[3],
+                close=k[4],
+                volume=k[5]
             )
-            rows = cursor.fetchall()
-        else:
-            # Eğer otomatik çekme başarısız olursa, boş bir liste döndür.
-            return jsonify([])
-
-    db_data = [[row[f] for f in row.keys()] for row in rows]
-    return jsonify(db_data)
-
-
-# ... (diğer endpoint'ler değişmedi) ...
-@api_bp.route('/latest_kline')
-def get_latest_kline_data():
-    """Grafiğin son mumunu canlı güncellemek için sadece en son mumu Binance'ten çeker."""
-    symbol = request.args.get('symbol', 'BTCUSDT').upper()
-    interval = request.args.get('interval', '1h')
-
-    if symbol not in current_app.config['ALLOWED_SYMBOLS'] or interval not in current_app.config['ALLOWED_INTERVALS']:
-        return jsonify({"error": "Geçersiz sembol veya zaman aralığı"}), 400
-
-    try:
-        url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&limit=2"
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        data = response.json()
+            for k in new_klines_data if k[0] not in existing_times
+        ]
         
-        latest_kline = data[-1] if data else None
-        if not latest_kline: return jsonify(None)
+        # Toplu kayıt işlemi (bulk save) ile yeni verileri veritabanına verimli bir şekilde ekle.
+        if kline_objects:
+            db.session.bulk_save_objects(kline_objects)
+            db.session.commit()
 
-        formatted_kline = { "x": latest_kline[0], "o": float(latest_kline[1]), "h": float(latest_kline[2]), "l": float(latest_kline[3]), "c": float(latest_kline[4]), "v": float(latest_kline[5]) }
-        return jsonify(formatted_kline)
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': str(e)}), 500
-
-@api_bp.route('/ticker')
-def get_ticker_data():
-    """İzleme listesi için anlık fiyat verilerini çeker."""
-    symbols_query = request.args.get('symbols')
-    if not symbols_query: return jsonify({})
+    # 4. Adım: Tüm güncel veriyi veritabanından çek ve arayüze gönder.
+    # Arayüzün aşırı veri ile yavaşlamaması için sonucu limitle.
+    all_klines_from_db = Kline.query.filter_by(symbol=symbol, interval=interval).order_by(Kline.open_time.desc()).limit(limit).all()
+    # Grafiklerin doğru çizilmesi için veriyi zaman damgasına göre artan şekilde sırala.
+    all_klines_from_db.reverse()
     
-    symbols_json = f'["' + '","'.join(symbols_query.split(',')) + '"]'
-    try:
-        url = f"https://api.binance.com/api/v3/ticker/24hr?symbols={symbols_json}"
-        response = requests.get(url, timeout=5)
-        response.raise_for_status()
-        ticker_data = {item['symbol']: {'lastPrice': item['lastPrice'], 'priceChangePercent': item['priceChangePercent']} for item in response.json()}
-        return jsonify(ticker_data)
-    except requests.exceptions.RequestException as e:
-        return jsonify({'error': f'Binance API ile iletişim kurulamadı: {e}'}), 500
+    # Veriyi arayüzün (JavaScript) beklediği formata dönüştür.
+    response_data = [
+        {
+            "x": kline.open_time,
+            "o": float(kline.open),
+            "h": float(kline.high),
+            "l": float(kline.low),
+            "c": float(kline.close),
+        }
+        for kline in all_klines_from_db
+    ]
+
+    return jsonify(response_data)
