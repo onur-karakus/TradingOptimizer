@@ -1,5 +1,5 @@
 import { state } from "./state.js";
-import calculateIndicators from "./calculations/index.js";
+import { calculateIndicators } from "./calculations/index.js";
 
 let chart;
 
