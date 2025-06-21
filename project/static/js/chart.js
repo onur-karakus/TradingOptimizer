@@ -55,6 +55,13 @@ export function initializeCharts() {
  */
 function calculateAllSeries() {
     const { klineData, activeOverlays, activePaneIndicator } = getState();
+    const chartContainer = document.getElementById('chart-container');
+    
+    const isPaneActive = !!activePaneIndicator;
+    if (isPaneActive !== chartContainer.classList.contains('pane-active')) {
+        chartContainer.classList.toggle('pane-active', isPaneActive);
+        setTimeout(() => window.dispatchEvent(new Event('resize')), 250);
+    }
 
     if (!klineData || klineData.length === 0) {
         return { mainSeries: [], secondarySeries: [] };
@@ -66,9 +73,6 @@ function calculateAllSeries() {
             mainSeries.push(...indicatorData);
         }
     });
-    
-    // Eğer bir "pane" göstergesi aktifse, onun verisini hesapla.
-    // Değilse, boş bir dizi gönder, bu da ikincil grafiği temizler.
     const secondarySeries = [];
     if (activePaneIndicator) {
         const seriesData = activePaneIndicator.definition.calculation(klineData, activePaneIndicator.settings);
@@ -109,20 +113,36 @@ function updatePriceAnnotation() {
 
 
 /**
- * AĞIR GÜNCELLEME: Grafik seçeneklerini günceller.
+ * AĞIR GÜNCELLEME: Grafik seçeneklerini günceller ve zoom durumunu korur.
  * @param {Array|null} rawData - API'den gelen ham veri.
  * @param {boolean} resetZoom - True ise grafiğin zoom'unu sıfırlar.
  */
 export function updateAllCharts(rawData = null, resetZoom = false) {
+    // Güncellemeden önce mevcut zoom aralığını al.
     const minX = mainChart.w.globals.minX;
     const maxX = mainChart.w.globals.maxX;
+    // Kullanıcının gerçekten bir zoom/pan yapıp yapmadığını kontrol et.
+    const isZoomedOrPanned = mainChart.w.globals.isZoomed || mainChart.w.globals.isPanned;
 
     if (rawData) {
         setKlineData(rawData);
     }
     const { mainSeries, secondarySeries } = calculateAllSeries();
     
-    mainChart.updateOptions({ series: mainSeries }, false, false);
+    // Ana grafik için güncelleme seçeneklerini hazırla.
+    const mainOptionsToUpdate = {
+        series: mainSeries,
+        // *** DÜZELTME: Zoom'u korumak için xaxis min/max değerlerini burada ayarla ***
+        xaxis: {
+            // Eğer zoom sıfırlanmayacaksa ve kullanıcı zoom yapmışsa, eski aralığı koru.
+            // Aksi halde 'undefined' bırakarak ApexCharts'ın otomatik ölçeklemesine izin ver.
+            min: !resetZoom && isZoomedOrPanned ? minX : undefined,
+            max: !resetZoom && isZoomedOrPanned ? maxX : undefined,
+        }
+    };
+
+    // Seçenekleri tek seferde güncelle. Bu, eski zoomX'li setTimeout'a olan ihtiyacı ortadan kaldırır.
+    mainChart.updateOptions(mainOptionsToUpdate, false, false);
 
     const { activePaneIndicator } = getState();
     let secondaryOpts = { 
@@ -138,6 +158,7 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
             secondaryOpts.yaxis.min = 0;
             secondaryOpts.yaxis.max = 100;
         } else if (indicatorId === 'volume' || indicatorId === 'macd') {
+            // Bu kısım orijinal kodunuzdan, potansiyel olarak 'bar' tipi seride ayarlanmalı.
             secondaryOpts.chart = { type: 'bar' };
         }
     }
@@ -145,20 +166,9 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
     
     updatePriceAnnotation();
 
-    if (resetZoom) {
-        const { klineData } = getState();
-        if (klineData && klineData.length > 0) {
-            const firstTimestamp = klineData[0].x;
-            const lastTimestamp = klineData[klineData.length - 1].x;
-            setTimeout(() => {
-                 mainChart.zoomX(firstTimestamp, lastTimestamp);
-            }, 0);
-        }
-    } else {
-        setTimeout(() => {
-            mainChart.zoomX(minX, maxX);
-        }, 0);
-    }
+    // Not: Eski 'setTimeout' ile 'zoomX' çağırma bloğu,
+    // zoom aralığı artık 'updateOptions' içinde ayarlandığı için kaldırıldı.
+    // 'resetZoom' true olduğunda, min/max 'undefined' olacağı için grafik otomatik olarak sıfırlanacaktır.
 }
 
 /**
@@ -175,6 +185,8 @@ export function updateLiveCharts() {
 
     updatePriceAnnotation();
     
+    // updateSeries genellikle zoom'u bozmaz, ancak bir güvenlik önlemi olarak
+    // veya senkronizasyon için zoomX'i burada tutmak mantıklıdır.
     setTimeout(() => {
         mainChart.zoomX(minX, maxX);
     }, 0);
