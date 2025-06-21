@@ -121,7 +121,6 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
     // Güncellemeden önce mevcut zoom aralığını al.
     const minX = mainChart.w.globals.minX;
     const maxX = mainChart.w.globals.maxX;
-    // Kullanıcının gerçekten bir zoom/pan yapıp yapmadığını kontrol et.
     const isZoomedOrPanned = mainChart.w.globals.isZoomed || mainChart.w.globals.isPanned;
 
     if (rawData) {
@@ -129,27 +128,15 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
     }
     const { mainSeries, secondarySeries } = calculateAllSeries();
     
-    // Ana grafik için güncelleme seçeneklerini hazırla.
-    const mainOptionsToUpdate = {
-        series: mainSeries,
-        // *** DÜZELTME: Sıçramayı (flicker) önlemek için animasyonları bu güncelleme için açıkça kapat. ***
-        chart: {
-            animations: {
-                enabled: false
-            }
-        },
-        xaxis: {
-            min: !resetZoom && isZoomedOrPanned ? minX : undefined,
-            max: !resetZoom && isZoomedOrPanned ? maxX : undefined,
-        }
-    };
+    // *** STABİLİTE DÜZELTMESİ: Sıçramayı önlemek için 'updateOptions' yerine 'updateSeries' kullan. ***
+    // Bu, tüm grafik yapısını yeniden çizmek yerine sadece veri yollarını günceller.
+    mainChart.updateSeries(mainSeries, false); // 'false' animasyonu engeller.
 
-    // Seçenekleri tek seferde güncelle.
-    mainChart.updateOptions(mainOptionsToUpdate, false, false);
-
+    // Alt grafiği güncelle, bu kısım sıçrama için daha az kritik.
     const { activePaneIndicator } = getState();
     let secondaryOpts = { 
         series: secondarySeries, 
+        chart: { animations: { enabled: false } },
         yaxis: { 
             opposite: true,
             labels: { style: { colors: 'var(--text-secondary)' } } 
@@ -161,12 +148,25 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
             secondaryOpts.yaxis.min = 0;
             secondaryOpts.yaxis.max = 100;
         } else if (indicatorId === 'volume' || indicatorId === 'macd') {
-            secondaryOpts.chart = { type: 'bar' };
+            secondaryOpts.chart.type = 'bar';
         }
     }
     secondaryChart.updateOptions(secondaryOpts, false, false);
     
     updatePriceAnnotation();
+
+    // Veri güncellendikten sonra, zoom durumunu manuel olarak yönet.
+    if (resetZoom) {
+        // Eğer reset istenirse, tüm veri aralığına zoom yap.
+        const { klineData } = getState();
+        if (klineData && klineData.length > 0) {
+            mainChart.zoomX(klineData[0].x, klineData[klineData.length - 1].x);
+        }
+    } else if (isZoomedOrPanned) {
+        // Eğer bir zoom/pan durumu varsa, sıfırlanmasını önlemek için yeniden uygula.
+        mainChart.zoomX(minX, maxX);
+    }
+    // Eğer reset istenmemişse ve zoom/pan yapılmamışsa, bir şey yapma ve grafiğin otomatik ölçeklenmesine izin ver.
 }
 
 /**
@@ -175,6 +175,7 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
 export function updateLiveCharts() {
     const minX = mainChart.w.globals.minX;
     const maxX = mainChart.w.globals.maxX;
+    const isZoomedOrPanned = mainChart.w.globals.isZoomed || mainChart.w.globals.isPanned;
 
     const { mainSeries, secondarySeries } = calculateAllSeries();
     
@@ -183,7 +184,11 @@ export function updateLiveCharts() {
 
     updatePriceAnnotation();
     
-    setTimeout(() => {
-        mainChart.zoomX(minX, maxX);
-    }, 0);
+    // updateSeries genellikle zoom'u bozmaz, ancak bir güvenlik önlemi olarak
+    // veya senkronizasyon için zoomX'i burada tutmak mantıklıdır.
+    if (isZoomedOrPanned) {
+        setTimeout(() => {
+            mainChart.zoomX(minX, maxX);
+        }, 0);
+    }
 }
