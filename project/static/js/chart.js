@@ -132,16 +132,19 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
     // Ana grafik için güncelleme seçeneklerini hazırla.
     const mainOptionsToUpdate = {
         series: mainSeries,
-        // *** DÜZELTME: Zoom'u korumak için xaxis min/max değerlerini burada ayarla ***
+        // *** DÜZELTME: Sıçramayı (flicker) önlemek için animasyonları bu güncelleme için açıkça kapat. ***
+        chart: {
+            animations: {
+                enabled: false
+            }
+        },
         xaxis: {
-            // Eğer zoom sıfırlanmayacaksa ve kullanıcı zoom yapmışsa, eski aralığı koru.
-            // Aksi halde 'undefined' bırakarak ApexCharts'ın otomatik ölçeklemesine izin ver.
             min: !resetZoom && isZoomedOrPanned ? minX : undefined,
             max: !resetZoom && isZoomedOrPanned ? maxX : undefined,
         }
     };
 
-    // Seçenekleri tek seferde güncelle. Bu, eski zoomX'li setTimeout'a olan ihtiyacı ortadan kaldırır.
+    // Seçenekleri tek seferde güncelle.
     mainChart.updateOptions(mainOptionsToUpdate, false, false);
 
     const { activePaneIndicator } = getState();
@@ -158,17 +161,12 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
             secondaryOpts.yaxis.min = 0;
             secondaryOpts.yaxis.max = 100;
         } else if (indicatorId === 'volume' || indicatorId === 'macd') {
-            // Bu kısım orijinal kodunuzdan, potansiyel olarak 'bar' tipi seride ayarlanmalı.
             secondaryOpts.chart = { type: 'bar' };
         }
     }
     secondaryChart.updateOptions(secondaryOpts, false, false);
     
     updatePriceAnnotation();
-
-    // Not: Eski 'setTimeout' ile 'zoomX' çağırma bloğu,
-    // zoom aralığı artık 'updateOptions' içinde ayarlandığı için kaldırıldı.
-    // 'resetZoom' true olduğunda, min/max 'undefined' olacağı için grafik otomatik olarak sıfırlanacaktır.
 }
 
 /**
@@ -185,8 +183,6 @@ export function updateLiveCharts() {
 
     updatePriceAnnotation();
     
-    // updateSeries genellikle zoom'u bozmaz, ancak bir güvenlik önlemi olarak
-    // veya senkronizasyon için zoomX'i burada tutmak mantıklıdır.
     setTimeout(() => {
         mainChart.zoomX(minX, maxX);
     }, 0);
