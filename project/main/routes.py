@@ -1,13 +1,10 @@
-# project/main/routes.py
-# Ana uygulama route'larını (örn. anasayfa) içeren Blueprint.
-
 from flask import Blueprint, render_template
 
-# 'main' adında bir Blueprint oluştur
-main_bp = Blueprint('main', __name__, template_folder='../templates')
+# Blueprint nesnesinin adının 'main' olarak ayarlanması,
+# __init__.py dosyasındaki 'from .main.routes import main' ifadesiyle
+# eşleşmesini ve hatanın giderilmesini sağlar.
+main = Blueprint('main', __name__)
 
-@main_bp.route('/')
+@main.route('/')
 def index():
-    """Ana sayfayı render eder."""
-    # templates klasöründeki index.html dosyasını döndürür.
-    return render_template('index.html')
+    return render_template("index.html")

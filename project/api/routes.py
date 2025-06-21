@@ -1,5 +1,6 @@
 from flask import Blueprint, jsonify, request
-from data_fetcher import get_klines
+# İçe aktarma (import) hatasını çözmek için modül doğrudan içeri aktarıldı.
+import data_fetcher
 from ..models import Kline
 from ..db import db
 
@@ -26,12 +27,12 @@ def klines_endpoint():
         start_time = last_kline.open_time
 
     # 2. Adım: API'den yeni verileri çek.
-    new_klines_data = get_klines(symbol=symbol, interval=interval, startTime=start_time, limit=limit)
+    # Fonksiyon, modül adıyla birlikte daha açık bir şekilde çağrıldı.
+    new_klines_data = data_fetcher.get_klines(symbol=symbol, interval=interval, startTime=start_time, limit=limit)
 
     # 3. Adım: Gelen yeni verileri veritabanına kaydet.
     if new_klines_data:
         # Hızlı kontrol için veritabanındaki mevcut zaman damgalarını bir sete al.
-        # Bu, gereksiz veritabanı sorgularını önler ve performansı artırır.
         query_start_time = new_klines_data[0][0]
         existing_times = {
             t[0] for t in db.session.query(Kline.open_time).filter(
@@ -62,9 +63,7 @@ def klines_endpoint():
             db.session.commit()
 
     # 4. Adım: Tüm güncel veriyi veritabanından çek ve arayüze gönder.
-    # Arayüzün aşırı veri ile yavaşlamaması için sonucu limitle.
     all_klines_from_db = Kline.query.filter_by(symbol=symbol, interval=interval).order_by(Kline.open_time.desc()).limit(limit).all()
-    # Grafiklerin doğru çizilmesi için veriyi zaman damgasına göre artan şekilde sırala.
     all_klines_from_db.reverse()
     
     # Veriyi arayüzün (JavaScript) beklediği formata dönüştür.
