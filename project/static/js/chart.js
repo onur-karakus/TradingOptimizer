@@ -138,4 +138,3 @@ function destroyChart() {
 }
 
 export { createChart, updateChart, destroyChart };
-/** test
