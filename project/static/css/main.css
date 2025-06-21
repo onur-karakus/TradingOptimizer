@@ -1,0 +1,104 @@
+/* project/static/css/main.css */
+:root {
+    --bg-primary: #131722;
+    --bg-secondary: #1e222d;
+    --bg-tertiary: #2a2e39;
+    --text-primary: #d1d4dc;
+    --text-secondary: #8c919e;
+    --accent-primary: #2962ff;
+    --accent-secondary: #e91e63;
+    --border-color: #2a2e39;
+    --up-color: #089981;
+    --down-color: #f23645;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.main-container { display: flex; width: 100%; height: 100%; }
+.left-toolbar { width: 50px; flex-shrink: 0; background-color: var(--bg-secondary); border-right: 1px solid var(--border-color); padding: 10px 0; display: flex; flex-direction: column; align-items: center; gap: 15px; }
+.tool-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; padding: 8px; border-radius: 4px; transition: all 0.2s ease; }
+.tool-btn:hover, .tool-btn.active { background-color: var(--bg-tertiary); color: var(--text-primary); }
+.center-content { flex-grow: 1; display: flex; flex-direction: column; padding: 10px; }
+.right-sidebar { width: 300px; flex-shrink: 0; background-color: var(--bg-secondary); border-left: 1px solid var(--border-color); display: flex; flex-direction: column; }
+.sidebar-header { padding: 15px; border-bottom: 1px solid var(--border-color); font-size: 1.1rem; font-weight: 600; }
+.watchlist-container { flex-grow: 1; overflow-y: auto; }
+.watchlist-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; cursor: pointer; transition: background-color 0.2s; border-bottom: 1px solid var(--border-color); }
+.watchlist-item:hover { background-color: var(--bg-tertiary); }
+.watchlist-item .pair { font-weight: 500; }
+.watchlist-item .price { text-align: right; }
+.watchlist-item .last-price { font-weight: 500; }
+.watchlist-item .change { font-size: 0.8rem; margin-left: 8px; }
+.watchlist-item .change.up { color: var(--up-color); }
+.watchlist-item .change.down { color: var(--down-color); }
+#chart-toolbar { display: flex; align-items: center; gap: 12px; padding: 5px 10px; flex-shrink: 0; flex-wrap: wrap; }
+#pair-info h1 { font-size: 1.2rem; font-weight: 600; cursor: pointer;}
+.indicators-btn { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 6px; background-color: transparent; border: none; color: var(--text-secondary); cursor: pointer; transition: all 0.2s ease; }
+.indicators-btn:hover { background-color: var(--bg-tertiary); color: var(--text-primary); }
+#active-indicators-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: 10px; }
+.indicator-tag { display: flex; align-items: center; gap: 6px; background-color: var(--bg-tertiary); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; }
+.indicator-tag .config-indicator-btn, .indicator-tag .remove-indicator-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; transition: color 0.2s; }
+.indicator-tag .config-indicator-btn:hover { color: var(--accent-primary); }
+.indicator-tag .remove-indicator-btn:hover { color: var(--accent-secondary); }
+
+/* --- ANA DÜZELTME: KIRILMAZ GRAFİK DÜZENİ (CSS GRID) --- */
+#chart-container { 
+    flex-grow: 1;
+    display: grid;
+    /* 2 satır oluştur: üstteki 4 birim, alttaki 1 birim yükseklikte olsun. */
+    /* Bu, yaklaşık %80 / %20 oranını sabitler. */
+    grid-template-rows: 4fr 1fr; 
+    gap: 8px; /* Grafikler arasına boşluk koy */
+    min-height: 0; /* Flexbox içindeki grid'in taşmasını engeller */
+}
+#main-chart, #secondary-chart-container {
+    /* Grafiklerin kendi grid alanlarını tamamen doldurmasını sağla */
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0; /* Taşmayı önle */
+}
+#secondary-chart-container {
+    border-top: 1px solid var(--border-color);
+}
+
+
+#loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 6px solid var(--bg-tertiary); border-top: 6px solid var(--accent-primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; z-index: 10; display: none; }
+@keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: flex-start; padding-top: 10vh; z-index: 1001; }
+.modal-content { background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; width: 90%; max-width: 500px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+.modal-header h4 { font-size: 1.1rem; }
+.close-modal-btn { background: none; border: none; color: var(--text-secondary); cursor: pointer; }
+.modal-body { padding: 20px; overflow-y: auto; }
+.modal-body input { width: 100%; padding: 12px; margin-bottom: 20px; background-color: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 6px; }
+#indicators-list, #symbols-list { list-style: none; padding: 0;}
+.list-item { padding: 12px 8px; border-radius: 6px; cursor: pointer; transition: background-color 0.2s; }
+.list-item:hover { background-color: var(--bg-tertiary); }
+.list-item h5 { font-size: 1rem; margin-bottom: 4px; display: flex; align-items: center;}
+.list-item p { font-size: 0.8rem; color: var(--text-secondary); }
+.list-item span.type-tag { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px; }
+.type-tag.overlay { background-color: var(--accent-primary); color: white; }
+.type-tag.pane { background-color: var(--accent-secondary); color: white; }
+#settings-form .form-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+#settings-form label { font-size: 0.9rem; }
+#settings-form input[type="number"] { width: 80px; padding: 8px; background-color: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; }
+.modal-footer { padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
+.modal-footer button { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 500; }
+.btn-primary { background-color: var(--accent-primary); color: white; }
+.btn-secondary { background-color: var(--bg-tertiary); color: var(--text-primary); }
+
+#interval-selector-container { position: relative; }
+.interval-dropdown-btn { background-color: transparent; border: none; color: var(--text-secondary); padding: 6px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
+.interval-dropdown-btn:hover, .interval-dropdown-btn.active { background-color: var(--bg-tertiary); color: var(--text-primary); }
+.interval-dropdown-content { display: none; position: absolute; top: calc(100% + 5px); left: 0; background-color: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 6px; padding: 5px; min-width: 120px; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.2); overflow: hidden; }
+.interval-dropdown-content a { color: var(--text-primary); padding: 8px 12px; text-decoration: none; display: block; border-radius: 4px; transition: background-color 0.2s; font-size: 0.9rem; }
+.interval-dropdown-content a:hover { background-color: var(--bg-tertiary); }
+.interval-dropdown-content a.active { background-color: var(--accent-primary); color: white; }

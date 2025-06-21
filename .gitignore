@@ -1,0 +1,48 @@
+# .gitignore
+
+# Python #
+###########
+# Sanal Ortamlar
+venv/
+env/
+.venv/
+.env/
+
+# Python cache dosyaları ve derlenmiş dosyalar
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Paketleme ve kurulum dosyaları
+.eggs/
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Veritabanı dosyaları
+*.sqlite3
+*.db
+
+# Instance klasörü (hassas konfigürasyon ve veritabanı içerebilir)
+/instance/
+
+# IDE ve Editör Dosyaları #
+##########################
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# İşletim Sistemi Dosyaları #
+#############################
+.DS_Store
+Thumbs.db
+
+# Test ve Raporlama Dosyaları #
+################################
+.pytest_cache/
+.coverage
+htmlcov/

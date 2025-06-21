@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingOptimizer Pro - Gelişmiş Finansal Analiz</title>
+    
+    <!-- Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Charting Library -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body>
+
+    <div class="main-container">
+        <aside class="left-toolbar">
+            <button class="tool-btn active" title="İmleç"><i data-lucide="move-diagonal"></i></button>
+        </aside>
+
+        <div class="center-content">
+            <div id="chart-toolbar">
+                <div id="pair-info" title="Sembol değiştirmek için tıklayın"></div>
+                <div id="interval-selector-container"></div>
+                <button class="indicators-btn" id="open-indicator-modal-btn">
+                    <i data-lucide="bar-chart-horizontal"></i>
+                    <span>Göstergeler</span>
+                </button>
+                <div id="active-indicators-list"></div>
+            </div>
+            
+            <div id="chart-container">
+                <!-- ANA DÜZELTME: Eksik olan loader elementi geri eklendi. -->
+                <div id="loader"></div>
+                <!-- Ana grafik (1. satır) -->
+                <div id="main-chart"></div>
+                <!-- İkincil grafik (2. satır) -->
+                <div id="secondary-chart-container"></div>
+            </div>
+        </div>
+
+        <aside class="right-sidebar">
+            <div class="sidebar-header">İzleme Listesi</div>
+            <div class="watchlist-container"></div>
+        </aside>
+    </div>
+    
+    <!-- Modals -->
+    <div id="indicator-modal-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h4>Göstergeler</h4><button class="close-modal-btn"><i data-lucide="x"></i></button></div>
+            <div class="modal-body">
+                <input type="text" id="indicator-search" placeholder="Gösterge ara..."><ul id="indicators-list"></ul>
+            </div>
+        </div>
+    </div>
+    <div id="symbol-search-overlay" class="modal-overlay">
+         <div class="modal-content">
+            <div class="modal-header"><h4>Sembol Ara</h4><button class="close-modal-btn"><i data-lucide="x"></i></button></div>
+            <div class="modal-body">
+                <input type="text" id="symbol-search-input" placeholder="Sembol ara (örn: ETHUSDT)"><ul id="symbols-list"></ul>
+            </div>
+        </div>
+    </div>
+     <div id="settings-modal-overlay" class="modal-overlay">
+         <div class="modal-content">
+            <div class="modal-header"><h4 id="settings-modal-title">Ayarlar</h4><button class="close-modal-btn"><i data-lucide="x"></i></button></div>
+            <div class="modal-body"><form id="settings-form"></form></div>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary close-modal-btn">İptal</button>
+                <button type="submit" form="settings-form" class="btn-primary">Uygula</button>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
