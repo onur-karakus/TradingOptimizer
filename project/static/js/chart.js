@@ -1,5 +1,7 @@
 import { state } from "./state.js";
-import { calculateIndicators } from "./calculations/index.js";
+// Hata veren 'named import' yerine, 'calculations/index.js' dosyasındaki
+// 'export default function calculate...' ifadesine uygun 'default import' kullanıldı.
+import calculate from "./calculations/index.js";
 
 let chart;
 
@@ -90,20 +92,17 @@ function updateChart(data) {
     createChart(data);
   } else {
     // Güncellemeden önce mevcut yakınlaştırma aralığını al.
-    // ApexCharts, `w.globals` içinde grafiğin mevcut durumuyla ilgili bilgileri saklar.
     const min = chart.w.globals.minX;
     const max = chart.w.globals.maxX;
     // Kullanıcının yakınlaştırma veya kaydırma yapıp yapmadığını kontrol et.
     const isZoomedOrPanned = chart.w.globals.isZoomed || chart.w.globals.isPanned;
 
-    // Göstergeleri yeni verilere göre hesapla.
-    const indicators = calculateIndicators(data, state.indicators);
+    // Göstergeleri yeni verilere göre hesaplamak için doğru içe aktarılan fonksiyonu kullan.
+    const indicators = calculate(data, state.indicators);
 
     // `updateOptions` ile grafiği güncelle.
     chart.updateOptions({
       // Yakınlaştırma aralığını korumak için xaxis ayarlarını yeniden ata.
-      // Eğer kullanıcı yakınlaştırma/kaydırma yaptıysa, saklanan min/max değerlerini kullan.
-      // Aksi halde, `undefined` olarak bırakarak ApexCharts'ın otomatik ayarlama yapmasını sağla.
       xaxis: {
         min: isZoomedOrPanned ? min : undefined,
         max: isZoomedOrPanned ? max : undefined,
