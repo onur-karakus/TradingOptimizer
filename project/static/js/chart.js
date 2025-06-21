@@ -1,205 +1,141 @@
-// project/static/js/chart.js
-// Bu modül, ApexCharts grafiklerinin oluşturulması ve güncellenmesinden sorumludur.
+import { state } from "./state.js";
+import { calculateIndicators } from "./calculations/index.js";
 
-import { getState, setKlineData } from './state.js';
+let chart;
 
-let mainChart, secondaryChart;
-let interactionTimeout = null; // Kullanıcı etkileşimi için zamanlayıcı
-
-// Ana grafik için temel yapılandırma
-const mainChartOptions = {
-    series: [],
+function createChart(data) {
+  const options = {
+    series: [
+      {
+        name: "candle",
+        data: data.map((d) => {
+          return {
+            x: new Date(d.time),
+            y: [d.open, d.high, d.low, d.close],
+          };
+        }),
+      },
+    ],
     chart: {
-        type: 'candlestick',
-        height: '100%',
-        id: 'mainChart',
-        group: 'tradingCharts',
-        background: 'transparent',
-        animations: { enabled: false },
-        toolbar: { show: true, tools: { download: false, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true } },
-        zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
-        // --- ANA DÜZELTME: KULLANICI ETKİLEŞİMİ OLAYLARI ---
-        events: {
-            // Kullanıcı zoom yaptığında veya pan yaptığında tetiklenir.
-            zoomed: (chartContext, { xaxis }) => {
-                handleUserInteraction();
-            },
-            panned: (chartContext, point) => {
-                handleUserInteraction();
-            }
-        }
+      height: "100%",
+      type: "candlestick",
+      toolbar: {
+        show: true,
+        autoSelected: "zoom",
+      },
+      zoom: {
+        enabled: true,
+        type: "x",
+        autoScaleYaxis: true,
+      },
     },
-    xaxis: { type: 'datetime', labels: { style: { colors: 'var(--text-secondary)' } } },
-    yaxis: { tooltip: { enabled: true }, labels: { style: { colors: 'var(--text-secondary)' }, formatter: (v) => v ? `$${v.toFixed(2)}` : '' }, opposite: true },
-    tooltip: { shared: true, theme: 'dark', x: { format: 'dd MMM HH:mm' } },
-    plotOptions: { candlestick: { colors: { upward: 'var(--up-color)', downward: 'var(--down-color)' }, wick: { useFillColor: true } } },
-    grid: { borderColor: 'var(--border-color)', strokeDashArray: 4 },
-};
-
-// Alt grafik için temel yapılandırma
-const secondaryChartOptions = {
-    series: [],
-    chart: {
-        type: 'line',
-        height: '100%',
-        id: 'secondaryChart',
-        group: 'tradingCharts',
-        background: 'transparent',
-        animations: { enabled: false },
-        toolbar: { show: false }
+    title: {
+      text: "CandleStick Chart",
+      align: "left",
     },
-    xaxis: { type: 'datetime', labels: { show: false } },
-    yaxis: { labels: { style: { colors: 'var(--text-secondary)' } }, opposite: true },
-    tooltip: { theme: 'dark', x: { format: 'dd MMM HH:mm' } },
-    grid: { borderColor: 'var(--border-color)', strokeDashArray: 4 }
-};
+    xaxis: {
+      type: "datetime",
+      labels: {
+        datetimeUTC: false,
+      },
+    },
+    yaxis: {
+      tooltip: {
+        enabled: true,
+      },
+      opposite: true,
+      labels: {
+        formatter: function (value) {
+          return value.toFixed(2);
+        },
+      },
+    },
+    tooltip: {
+      shared: true,
+      custom: function ({ series, seriesIndex, dataPointIndex, w }) {
+        const o = w.globals.seriesCandleO[seriesIndex][dataPointIndex];
+        const h = w.globals.seriesCandleH[seriesIndex][dataPointIndex];
+        const l = w.globals.seriesCandleL[seriesIndex][dataPointIndex];
+        const c = w.globals.seriesCandleC[seriesIndex][dataPointIndex];
+        return (
+          '<div class="apexcharts-tooltip-candlestick">' +
+          '<div>Open: <span class="value">' +
+          o +
+          "</span></div>" +
+          '<div>High: <span class="value">' +
+          h +
+          "</span></div>" +
+          '<div>Low: <span class="value">' +
+          l +
+          "</span></div>" +
+          '<div>Close: <span class="value">' +
+          c +
+          "</span></div>" +
+          "</div>"
+        );
+      },
+    },
+  };
 
-// Bu fonksiyon app.js'ten çağrılır ve güncelleme kontrol fonksiyonlarını alır.
-export function initializeCharts(updateControls) {
-    // Grafik seçeneklerine olay dinleyicilerini ekle.
-    mainChartOptions.chart.events.zoomed = () => handleUserInteraction(updateControls);
-    mainChartOptions.chart.events.panned = () => handleUserInteraction(updateControls);
-
-    mainChart = new ApexCharts(document.getElementById('main-chart'), mainChartOptions);
-    secondaryChart = new ApexCharts(document.getElementById('secondary-chart-container'), secondaryChartOptions);
-    mainChart.render();
-    secondaryChart.render();
+  chart = new ApexCharts(document.querySelector("#chart"), options);
+  chart.render();
 }
 
 /**
- * Kullanıcı grafikle etkileşime girdiğinde (zoom/pan), canlı güncellemeleri
- * geçici olarak durdurur ve bir süre sonra yeniden başlatır.
+ * Grafik verilerini günceller ve yakınlaştırma durumunu korur.
+ * @param {Array} data - Yeni grafik verisi.
  */
-function handleUserInteraction(updateControls) {
-    if (updateControls && typeof updateControls.stopUpdates === 'function') {
-        updateControls.stopUpdates();
-    }
-    
-    // Önceki zamanlayıcıyı temizle
-    if (interactionTimeout) {
-        clearTimeout(interactionTimeout);
-    }
-    
-    // 2 saniye sonra canlı güncellemeleri yeniden başlatmak için yeni bir zamanlayıcı ayarla.
-    interactionTimeout = setTimeout(() => {
-        if (updateControls && typeof updateControls.startUpdates === 'function') {
-            updateControls.startUpdates();
-        }
-    }, 2000); // 2 saniyelik bir gecikme
-}
+function updateChart(data) {
+  if (!chart) {
+    createChart(data);
+  } else {
+    // Güncellemeden önce mevcut yakınlaştırma aralığını al.
+    // ApexCharts, `w.globals` içinde grafiğin mevcut durumuyla ilgili bilgileri saklar.
+    const min = chart.w.globals.minX;
+    const max = chart.w.globals.maxX;
+    // Kullanıcının yakınlaştırma veya kaydırma yapıp yapmadığını kontrol et.
+    const isZoomedOrPanned = chart.w.globals.isZoomed || chart.w.globals.isPanned;
 
+    // Göstergeleri yeni verilere göre hesapla.
+    const indicators = calculateIndicators(data, state.indicators);
 
-/**
- * Mevcut state'e göre ana ve alt grafikler için tüm serileri (mumlar + göstergeler) hesaplar.
- */
-function calculateAllSeries() {
-    const { klineData, activeOverlays, activePaneIndicator } = getState();
-
-    if (!klineData || klineData.length === 0) {
-        return { mainSeries: [], secondarySeries: [] };
-    }
-    const mainSeries = [{ type: 'candlestick', name: 'Fiyat', data: klineData.map(d => ({ x: d.x, y: [d.o, d.h, d.l, d.c] })) }];
-    activeOverlays.forEach(indicator => {
-        const indicatorData = indicator.definition.calculation(klineData, indicator.settings);
-        if (indicatorData && Array.isArray(indicatorData)) {
-            mainSeries.push(...indicatorData);
-        }
+    // `updateOptions` ile grafiği güncelle.
+    chart.updateOptions({
+      // Yakınlaştırma aralığını korumak için xaxis ayarlarını yeniden ata.
+      // Eğer kullanıcı yakınlaştırma/kaydırma yaptıysa, saklanan min/max değerlerini kullan.
+      // Aksi halde, `undefined` olarak bırakarak ApexCharts'ın otomatik ayarlama yapmasını sağla.
+      xaxis: {
+        min: isZoomedOrPanned ? min : undefined,
+        max: isZoomedOrPanned ? max : undefined,
+      },
+      // Serileri yeni verilerle güncelle.
+      series: [
+        {
+          name: "candle",
+          data: data.map((d) => {
+            return {
+              x: new Date(d.time),
+              y: [d.open, d.high, d.low, d.close],
+            };
+          }),
+        },
+        ...indicators.series, // Hesaplanan gösterge serilerini ekle.
+      ],
+      // Göstergeler için y-eksenlerini güncelle.
+      yaxis: indicators.yaxis,
     });
-    
-    const secondarySeries = [];
-    if (activePaneIndicator) {
-        const seriesData = activePaneIndicator.definition.calculation(klineData, activePaneIndicator.settings);
-        if (seriesData && Array.isArray(seriesData)) {
-            secondarySeries.push(...seriesData);
-        }
-    }
-    return { mainSeries, secondarySeries };
+  }
 }
 
 /**
- * Grafikteki son fiyat etiketini (annotation) oluşturur veya günceller.
+ * Grafiği DOM'dan kaldırır.
  */
-function updatePriceAnnotation() {
-    const { klineData } = getState();
-    if (!klineData || klineData.length < 1) return;
-
-    const lastPrice = klineData[klineData.length - 1].c;
-    const prevPrice = klineData.length > 1 ? klineData[klineData.length - 2].c : lastPrice;
-    const color = lastPrice >= prevPrice ? 'var(--up-color)' : 'var(--down-color)';
-
-    mainChart.removeAnnotation('price-line');
-    mainChart.addYaxisAnnotation({
-        id: 'price-line',
-        y: lastPrice,
-        borderColor: color,
-        strokeDashArray: 4,
-        label: {
-            borderColor: color,
-            style: { color: '#fff', background: color },
-            text: lastPrice.toFixed(2),
-            position: 'right',
-            textAnchor: 'start',
-            offsetX: 10,
-        }
-    });
+function destroyChart() {
+  if (chart) {
+    chart.destroy();
+    chart = null;
+  }
 }
 
-
-/**
- * AĞIR GÜNCELLEME: Grafik seçeneklerini günceller.
- * @param {Array|null} rawData - API'den gelen ham veri.
- * @param {boolean} resetZoom - True ise grafiğin zoom'unu sıfırlar.
- */
-export function updateAllCharts(rawData = null, resetZoom = false) {
-    const minX = mainChart.w.globals.minX;
-    const maxX = mainChart.w.globals.maxX;
-
-    if (rawData) {
-        setKlineData(rawData);
-    }
-    const { mainSeries, secondarySeries } = calculateAllSeries();
-    
-    mainChart.updateOptions({ series: mainSeries }, false, false);
-
-    const { activePaneIndicator } = getState();
-    let secondaryOpts = { 
-        series: secondarySeries, 
-        yaxis: { 
-            opposite: true,
-            labels: { style: { colors: 'var(--text-secondary)' } } 
-        } 
-    };
-    if (activePaneIndicator) {
-        const indicatorId = activePaneIndicator.definition.id;
-        if (indicatorId === 'rsi' || indicatorId === 'stochastic') {
-            secondaryOpts.yaxis.min = 0;
-            secondaryOpts.yaxis.max = 100;
-        } else if (indicatorId === 'volume' || indicatorId === 'macd') {
-            secondaryOpts.chart = { type: 'bar' };
-        }
-    }
-    secondaryChart.updateOptions(secondaryOpts, false, false);
-    
-    updatePriceAnnotation();
-
-    if (resetZoom) {
-        mainChart.resetZoom();
-    } else {
-        setTimeout(() => {
-            mainChart.zoomX(minX, maxX);
-        }, 0);
-    }
-}
-
-/**
- * HAFİF GÜNCELLEME: Serilerin verisini güncellerken hem zoom hem de pan pozisyonunu KORUR.
- */
-export function updateLiveCharts() {
-    const { mainSeries, secondarySeries } = calculateAllSeries();
-    
-    // Canlı güncellemeler sırasında zoom'u korumak için updateSeries kullanıyoruz.
-    mainChart.updateSeries(mainSeries, false);
-    secondaryChart.updateSeries(secondarySeries, false);
-
-    updatePriceAnnotation();
-}
+export { createChart, updateChart, destroyChart };
+/** test
