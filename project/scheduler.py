@@ -1,75 +1,101 @@
 # project/scheduler.py
-# Arka planda periyodik olarak veri senkronizasyonu yapacak görevleri yönetir.
-
-import requests
-import time
-from datetime import datetime
-from flask import current_app
 from flask_apscheduler import APScheduler
-from .db import get_db
+# İçe aktarma sorunlarını önlemek için modülün kendisi kullanılır.
+import data_fetcher
+import logging
 
+# Loglama ayarları
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Var olmayan 'get_db' yerine, doğru olan 'db' nesnesi içeri aktarılır.
+from .db import db
+
+# Scheduler nesnesi
 scheduler = APScheduler()
 
-def get_interval_in_milliseconds(interval_str):
-    """Zaman aralığı string'ini milisaniyeye çevirir."""
-    unit = interval_str[-1]
-    value = int(interval_str[:-1])
-    if unit == 'm': return value * 60 * 1000
-    if unit == 'h': return value * 3600 * 1000
-    if unit == 'd': return value * 86400 * 1000
-    return 0
+# Desteklenen işlem çiftleri ve zaman aralıkları
+SUPPORTED_PAIRS = {
+    'BTCUSDT': ['1m', '5m', '15m'],
+    'ETHUSDT': ['1m', '5m', '15m']
+}
 
-def _sync_data_for_pair(app, symbol, interval):
-    """Belirtilen bir parite ve zaman aralığı için veriyi senkronize eder."""
-    with app.app_context():
-        db = get_db()
-        cursor = db.cursor()
-        
-        cursor.execute("SELECT MAX(open_time) FROM klines WHERE symbol = ? AND interval = ?", (symbol, interval))
-        last_time = cursor.fetchone()[0] or 0
+def update_klines(symbol, interval):
+    """
+    Belirli bir sembol ve zaman aralığı için kline verilerini güncelleyen zamanlanmış görev.
+    """
+    # Bu fonksiyon scheduler tarafından bir uygulama bağlamı (app_context) içinde çalıştırılır.
+    with scheduler.app.app_context():
+        # Döngüsel içe aktarmayı önlemek için 'Kline' modeli burada içeri aktarılır.
+        from .models import Kline
 
-        if not last_time: return
+        logger.info(f"Zamanlayıcı çalışıyor: {symbol} {interval}...")
 
-        while True:
-            start_time = last_time + 1
-            if start_time > int(time.time() * 1000) - get_interval_in_milliseconds(interval):
-                break
-            try:
-                url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval={interval}&startTime={start_time}&limit=1000"
-                response = requests.get(url, timeout=10)
-                response.raise_for_status()
-                klines = response.json()
+        try:
+            # 1. Veritabanındaki son kline verisinin zaman damgasını al.
+            # Flask-SQLAlchemy için standart olan 'db.session' kullanılır.
+            last_kline = db.session.query(Kline).filter_by(symbol=symbol, interval=interval).order_by(Kline.open_time.desc()).first()
+            start_time = last_kline.open_time if last_kline else None
 
-                if not klines: break
-                
-                data_to_insert = [(symbol, interval, k[0], float(k[1]), float(k[2]), float(k[3]), float(k[4]), float(k[5])) for k in klines]
-                cursor.executemany("INSERT OR IGNORE INTO klines (symbol, interval, open_time, open, high, low, close, volume) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", data_to_insert)
-                db.commit()
-                
-                last_time = klines[-1][0]
-                print(f"DB GÜNCELLEME (arka plan): '{symbol}-{interval}' için {len(klines)} yeni mum eklendi.")
+            # 2. API'den yeni verileri çek.
+            new_data = data_fetcher.get_klines(symbol=symbol, interval=interval, startTime=start_time)
 
-                if len(klines) < 1000: break
-                time.sleep(0.5)
-            except requests.exceptions.RequestException as e:
-                print(f"Scheduler API hatası ('{symbol}-{interval}'): {e}")
-                break
+            if not new_data:
+                logger.info(f"{symbol} {interval} için yeni veri bulunamadı.")
+                return
 
-# --- DEĞİŞİKLİK ---
-# Görevin amacı, kullanıcı bir grafiği açtığında veritabanının makul ölçüde
-# güncel olmasını sağlamaktır (backfilling). Gerçek zamanlı son mum güncellemesi
-# frontend tarafından /api/latest_kline endpoint'i üzerinden yapılır.
-# Bu nedenle, bu arka plan görevinin çok sık çalışmasına gerek yoktur.
-# Çalışma sıklığı 1 dakikaya ayarlandı.
-@scheduler.task('interval', id='sync_all_data_job', minutes=1, misfire_grace_time=30)
-def sync_all_data_job():
-    """Tüm sembol ve zaman aralıkları için veri senkronizasyonunu tetikler."""
-    app = scheduler.app
-    with app.app_context():
-        symbols = app.config['ALLOWED_SYMBOLS']
-        intervals = app.config['ALLOWED_INTERVALS']
-    
-    print(f"--- Periyodik DB Arka Plan Doldurma Görevi Başladı ({datetime.now().strftime('%H:%M:%S')}) ---")
-    for symbol in symbols:
+            # 3. Yeni verileri veritabanına ekle.
+            query_start_time = new_data[0][0]
+            existing_times = {
+                k.open_time for k in db.session.query(Kline.open_time).filter(
+                    Kline.symbol == symbol,
+                    Kline.interval == interval,
+                    Kline.open_time >= query_start_time
+                ).all()
+            }
+
+            klines_to_add = [
+                Kline(
+                    symbol=symbol, interval=interval, open_time=k[0], open=k[1],
+                    high=k[2], low=k[3], close=k[4], volume=k[5],
+                )
+                for k in new_data if k[0] not in existing_times
+            ]
+            
+            if klines_to_add:
+                db.session.add_all(klines_to_add)
+                db.session.commit()
+                logger.info(f"{symbol} {interval} için {len(klines_to_add)} adet yeni veri eklendi.")
+            else:
+                logger.info(f"{symbol} {interval} için veriler güncel.")
+
+        except Exception as e:
+            logger.error(f"{symbol} {interval} güncellenirken hata oluştu: {e}")
+            db.session.rollback()
+
+def initialize_jobs():
+    """
+    Tüm güncelleme görevlerini oluşturur ve zamanlayıcıya ekler.
+    """
+    logger.info("Zamanlayıcı görevleri başlatılıyor...")
+    for symbol, intervals in SUPPORTED_PAIRS.items():
         for interval in intervals:
-            _sync_data_for_pair(app, symbol, interval)
+            job_id = f"update_{symbol}_{interval}"
+            if not scheduler.get_job(job_id):
+                try:
+                    interval_seconds = int(interval[:-1]) * 60 
+                    scheduler.add_job(
+                        id=job_id, func=update_klines, args=[symbol, interval],
+                        trigger='interval', seconds=interval_seconds, misfire_grace_time=60
+                    )
+                    logger.info(f"Görev eklendi: {job_id}, her {interval_seconds} saniyede bir çalışacak.")
+                except Exception as e:
+                    logger.error(f"{job_id} görevi eklenirken hata: {e}")
+    logger.info("Zamanlayıcı görevleri başlatıldı.")
+
+# Bu görev, uygulama başladıktan kısa bir süre sonra bir defaya mahsus çalışarak
+# diğer ana görevleri başlatır ve başlangıçtaki uygulama bağlamı sorunlarını önler.
+@scheduler.task('date', id='init_scheduler_jobs')
+def scheduled_init():
+    """Ana veri çekme görevlerini başlatır."""
+    initialize_jobs()

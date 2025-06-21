@@ -1,7 +1,7 @@
+# project/api/routes.py
 from flask import Blueprint, jsonify, request
-# İçe aktarma (import) hatasını çözmek için modül doğrudan içeri aktarıldı.
 import data_fetcher
-from ..models import Kline
+# db nesnesi döngüye neden olmaz, bu yüzden burada kalabilir.
 from ..db import db
 
 api = Blueprint('api', __name__)
@@ -13,6 +13,10 @@ def klines_endpoint():
     Önce veritabanını kontrol eder, eksik verileri API'den çeker,
     veritabanını günceller ve sonucu veritabanından gönderir.
     """
+    # Model, döngüyü kırmak için dosyanın en başında değil,
+    # yalnızca bu fonksiyon içinde ihtiyaç duyulduğunda içeri aktarılır.
+    from ..models import Kline
+
     symbol = request.args.get('symbol', 'BTCUSDT').upper()
     interval = request.args.get('interval', '1h')
     limit = int(request.args.get('limit', '1000'))
@@ -22,17 +26,13 @@ def klines_endpoint():
     
     start_time = None
     if last_kline:
-        # Eğer veritabanında veri varsa, sadece eksik olan yeni verileri çekmek için
-        # başlangıç zamanını son verinin zamanı olarak ayarla.
         start_time = last_kline.open_time
 
     # 2. Adım: API'den yeni verileri çek.
-    # Fonksiyon, modül adıyla birlikte daha açık bir şekilde çağrıldı.
     new_klines_data = data_fetcher.get_klines(symbol=symbol, interval=interval, startTime=start_time, limit=limit)
 
     # 3. Adım: Gelen yeni verileri veritabanına kaydet.
     if new_klines_data:
-        # Hızlı kontrol için veritabanındaki mevcut zaman damgalarını bir sete al.
         query_start_time = new_klines_data[0][0]
         existing_times = {
             t[0] for t in db.session.query(Kline.open_time).filter(
@@ -42,7 +42,6 @@ def klines_endpoint():
             ).all()
         }
         
-        # Sadece veritabanında olmayan yeni mumları listeye ekle.
         kline_objects = [
             Kline(
                 symbol=symbol,
@@ -57,7 +56,6 @@ def klines_endpoint():
             for k in new_klines_data if k[0] not in existing_times
         ]
         
-        # Toplu kayıt işlemi (bulk save) ile yeni verileri veritabanına verimli bir şekilde ekle.
         if kline_objects:
             db.session.bulk_save_objects(kline_objects)
             db.session.commit()
@@ -66,7 +64,6 @@ def klines_endpoint():
     all_klines_from_db = Kline.query.filter_by(symbol=symbol, interval=interval).order_by(Kline.open_time.desc()).limit(limit).all()
     all_klines_from_db.reverse()
     
-    # Veriyi arayüzün (JavaScript) beklediği formata dönüştür.
     response_data = [
         {
             "x": kline.open_time,

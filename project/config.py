@@ -1,17 +1,18 @@
 # project/config.py
-# Uygulamanın tüm konfigürasyon değişkenlerini içerir.
-
 import os
 
+# Proje kök dizinini belirler. 'config.py' dosyasının bulunduğu dizin.
+basedir = os.path.abspath(os.path.dirname(__file__))
+
 class Config:
-    """Ana konfigürasyon sınıfı."""
-    # Veritabanı dosyasının yolu (instance klasörü içinde)
-    DATABASE = os.path.join(os.path.dirname(__file__), '..', 'instance', 'trading_data.db')
+    SECRET_KEY = os.environ.get('SECRET_KEY') or 'you-will-never-guess'
     
-    # Binance API tarafından desteklenen semboller ve zaman aralıkları
-    # YENİ: '1w' (1 hafta) ve '1M' (1 ay) eklendi.
-    ALLOWED_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT']
-    ALLOWED_INTERVALS = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M']
-    
-    # APScheduler yapılandırması
-    SCHEDULER_API_ENABLED = True
+    # Veritabanı yapılandırması.
+    # Bu satır, Flask-SQLAlchemy'ye veritabanı dosyasının nerede olduğunu söyler.
+    # 'sqlite:///' öneki bir SQLite veritabanı olduğunu belirtir.
+    # Geri kalanı ise, projenin ana klasöründe 'trading_data.db' adında bir dosya yolu oluşturur.
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+        'sqlite:///' + os.path.join(os.path.abspath(os.path.join(basedir, '..')), 'trading_data.db')
+        
+    # Flask-SQLAlchemy'nin olay sistemini devre dışı bırakarak performansı artırır.
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
