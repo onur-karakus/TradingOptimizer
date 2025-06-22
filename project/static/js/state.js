@@ -1,6 +1,4 @@
 // project/static/js/state.js
-// Bu modül, uygulamanın tüm paylaşılan durumunu (state) yönetir.
-
 import { INDICATORS, AVAILABLE_SYMBOLS } from './calculations/index.js';
 
 const state = {
@@ -10,7 +8,7 @@ const state = {
     activePaneIndicator: null,
     availableSymbols: AVAILABLE_SYMBOLS,
     allIndicators: INDICATORS,
-    klineData: [] // Grafik verisinin tek ve doğru kaynağı
+    klineData: []
 };
 
 export function getState() {
@@ -27,11 +25,6 @@ export function setInterval(newInterval) {
     state.currentInterval = newInterval;
 }
 
-/**
- * Gelen en son fiyat verisine göre state'deki mum dizisini günceller.
- * @param {Object} latestKline - /api/latest_kline'dan gelen veri.
- * @returns {boolean} Verinin güncellenip güncellenmediğini döndürür.
- */
 export function updateLastKlineData(latestKline) {
     if (!latestKline || !state.klineData || state.klineData.length === 0) {
         return false;
@@ -47,11 +40,10 @@ export function updateLastKlineData(latestKline) {
         return true;
     } 
     else if (latestKline.x > lastPoint.x) {
-        // --- ANA DÜZELTME ---
-        // Yeni bir mum oluştuğunda sadece sona ekle.
-        // En eski mumu silen .shift() komutu kaldırıldı.
-        // Bu, grafik güncellendiğinde geçmiş verilerin kaybolmasını önler.
         state.klineData.push(latestKline);
+        // Grafiğin sürekli sola kaymasını önlemek için baştan bir veri silinir.
+        // Bu, uzun süreli çalışmalarda belleğin dolmasını engeller.
+        state.klineData.shift(); 
         return true;
     }
     
@@ -69,6 +61,10 @@ export function addOverlayIndicator(indicatorId) {
 export function setPaneIndicator(indicatorId) {
     const definition = state.allIndicators.find(i => i.id === indicatorId);
     if (!definition || definition.type !== 'pane') return;
+    // Eğer zaten bir panel göstergesi varsa, onu kaldır.
+    if(state.activePaneIndicator) {
+        removeIndicator(state.activePaneIndicator.instanceId);
+    }
     const settings = {};
     definition.settings?.forEach(s => { settings[s.id] = s.default; });
     state.activePaneIndicator = { instanceId: `${definition.id}_${Date.now()}`, definition: definition, settings: settings };
@@ -92,15 +88,17 @@ export function getWatchlistSymbols() {
     return state.availableSymbols;
 }
 
-export function setKlineData(rawData) {
-    if (!rawData || rawData.length === 0) {
+export function setKlineData(apiData) {
+    if (!apiData || apiData.length === 0) {
         state.klineData = [];
-        return [];
+        return;
     }
-    const parsedData = rawData.map(k => ({ 
-        x: k[0], o: parseFloat(k[1]), h: parseFloat(k[2]), 
-        l: parseFloat(k[3]), c: parseFloat(k[4]), v: parseFloat(k[5])
+    state.klineData = apiData.map(k => ({ 
+        x: k.x, 
+        o: k.o, 
+        h: k.h, 
+        l: k.l, 
+        c: k.c,
+        v: k.v
     }));
-    state.klineData = parsedData;
-    return parsedData;
 }

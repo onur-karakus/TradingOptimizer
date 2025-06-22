@@ -1,60 +1,40 @@
 // project/static/js/calculations/utils.js
-// Birden fazla indikatör tarafından kullanılan yardımcı hesaplama fonksiyonları.
-
-/**
- * Üstel Hareketli Ortalama (EMA) hesaplar.
- * Null değerleri atlayarak daha sağlam bir hesaplama yapar.
- * @param {Array} data - Mum verisi dizisi veya {x, c} nesneleri. 'c' veya 'y' hesaplama için kaynak olarak kullanılır.
- * @param {Object} settings - Ayarlar (örn: { period: 20 }).
- * @returns {Array} {x, y} formatında EMA verisi.
- */
 export function calculateEMA(data, settings) {
     const { period } = settings;
-    // Kaynak olarak kapanış (c) veya zaten hesaplanmış bir değeri (y) kullan.
     const source = data.map(d => d.c ?? d.y); 
     if (source.filter(v => v != null).length < period) return data.map(d => ({x: d.x, y: null}));
     
     let emaData = [];
     const multiplier = 2 / (period + 1);
 
-    // Başlangıç SMA'sını null olmayan değerler üzerinden hesapla
-    const initialSlice = source.slice(0, period);
-    const validInitialValues = initialSlice.filter(v => v != null);
-    let sma = validInitialValues.reduce((a, b) => a + b, 0) / validInitialValues.length;
+    const firstValidIndex = source.findIndex(v => v != null);
+    if(firstValidIndex === -1 || firstValidIndex + period > source.length) return data.map(d => ({x: d.x, y: null}));
+
+    let sma = 0;
+    for(let i = firstValidIndex; i < firstValidIndex + period; i++) {
+        sma += source[i];
+    }
+    sma /= period;
 
     for (let i = 0; i < data.length; i++) {
-        if (i < period - 1 || source[i] == null) {
+        if (i < firstValidIndex + period -1 || source[i] == null) {
             emaData.push({ x: data[i].x, y: null });
             continue;
         }
         
-        // İlk EMA değerini SMA olarak ata
-        if (emaData.filter(e => e.y != null).length === 0) {
+        if (i === firstValidIndex + period - 1) {
              emaData.push({ x: data[i].x, y: sma });
              continue;
         }
 
         const prevEma = emaData[i - 1].y;
-        if (prevEma === null) {
-            // Eğer bir önceki EMA null ise, hesaplamaya devam etmek için en son geçerli EMA'yı bul.
-            let lastValidEma = null;
-            for(let j = i - 1; j >= 0; j--) {
-                if(emaData[j].y !== null) {
-                    lastValidEma = emaData[j].y;
-                    break;
-                }
-            }
-            // Eğer hala geçerli bir EMA yoksa (çok nadir bir durum), null ata.
-            if (lastValidEma === null) {
-                 emaData.push({ x: data[i].x, y: null });
-                 continue;
-            }
-            const ema = (source[i] - lastValidEma) * multiplier + lastValidEma;
-            emaData.push({ x: data[i].x, y: ema });
-        } else {
-             const ema = (source[i] - prevEma) * multiplier + prevEma;
-             emaData.push({ x: data[i].x, y: ema });
+        if(prevEma === null) {
+            emaData.push({ x: data[i].x, y: null });
+            continue;
         }
+       
+        const ema = (source[i] - prevEma) * multiplier + prevEma;
+        emaData.push({ x: data[i].x, y: ema });
     }
     return emaData;
 }

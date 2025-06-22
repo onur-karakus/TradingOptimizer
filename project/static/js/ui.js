@@ -1,13 +1,10 @@
 // project/static/js/ui.js
-// Bu modül, tüm DOM manipülasyonları ve olay dinleyicilerinden sorumludur.
-
 import { getState, addOverlayIndicator, setPaneIndicator, removeIndicator, updateIndicatorSettings } from './state.js';
 
 let callbacks = {};
 const ui = {
     loader: document.getElementById('loader'),
     pairInfo: document.getElementById('pair-info'),
-    // DEĞİŞİKLİK: Konteynerin ID'si güncellendi.
     intervalSelectorContainer: document.getElementById('interval-selector-container'),
     activeIndicatorsList: document.getElementById('active-indicators-list'),
     watchlistContainer: document.querySelector('.watchlist-container'),
@@ -27,7 +24,6 @@ export function initializeUI(cbs) {
     setupEventListeners();
     populateIndicatorModal();
     populateSymbolModalAndWatchlist();
-    // DEĞİŞİKLİK: Ayrı butonlar yerine dropdown menüsü oluşturuluyor.
     createTimeIntervalDropdown();
     updatePairHeader();
     updateActiveIndicatorTags();
@@ -49,7 +45,6 @@ function setupEventListeners() {
     ui.indicatorSearch.addEventListener('keyup', e => filterList(e.target.value, ui.indicatorList));
     ui.symbolSearch.addEventListener('keyup', e => filterList(e.target.value, ui.symbolList));
     
-    // Dropdown menüsü dışına tıklandığında menüyü kapat.
     window.addEventListener('click', function(event) {
         if (!ui.intervalSelectorContainer.contains(event.target)) {
             const dropdownContent = ui.intervalSelectorContainer.querySelector('.interval-dropdown-content');
@@ -97,21 +92,17 @@ function populateSymbolModalAndWatchlist() {
     });
 }
 
-// --- ANA DEĞİŞİKLİK: Dropdown Menüsü Oluşturma ---
 function createTimeIntervalDropdown() {
-    // YENİ: Haftalık ve aylık eklendi.
     const intervals = ['1m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1M'];
-    const intervalMap = {'1m': '1 Dakika', '5m': '5 Dakika', '15m': '15 Dakika', '30m': '30 Dakika', '1h': '1 Saat', '4h': '4 Saat', '1d': '1 Gün', '1w': '1 Hafta', '1M': '1 Ay'};
+    const intervalMap = {'1m': '1D', '5m': '5D', '15m': '15D', '30m': '30D', '1h': '1S', '4h': '4S', '1d': '1G', '1w': '1H', '1M': '1A'};
     const { currentInterval } = getState();
 
     ui.intervalSelectorContainer.innerHTML = '';
 
-    // Dropdown butonu
     const btn = document.createElement('button');
     btn.className = 'interval-dropdown-btn';
     btn.innerHTML = `<span>${intervalMap[currentInterval]}</span><i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>`;
     
-    // Dropdown içerik listesi
     const content = document.createElement('div');
     content.className = 'interval-dropdown-content';
 
@@ -126,30 +117,24 @@ function createTimeIntervalDropdown() {
 
         link.addEventListener('click', e => {
             e.preventDefault();
-            e.stopPropagation(); // Butonun click event'ini tetiklemeyi önle
-            
-            // Eğer zaten seçili olan seçildiyse bir şey yapma
+            e.stopPropagation();
             if (link.classList.contains('active')) {
                 content.style.display = 'none';
                 btn.classList.remove('active');
                 return;
             }
-            
             content.querySelector('.active')?.classList.remove('active');
             link.classList.add('active');
-            
             btn.querySelector('span').textContent = intervalMap[interval];
             content.style.display = 'none';
             btn.classList.remove('active');
-
             callbacks.onIntervalChange(interval);
         });
         content.appendChild(link);
     });
 
-    // Butona tıklandığında dropdown'u aç/kapat
     btn.addEventListener('click', (e) => {
-        e.stopPropagation(); // Pencere click event'ini tetiklemeyi önle
+        e.stopPropagation();
         const isShown = content.style.display === 'block';
         content.style.display = isShown ? 'none' : 'block';
         btn.classList.toggle('active', !isShown);
@@ -157,11 +142,7 @@ function createTimeIntervalDropdown() {
 
     ui.intervalSelectorContainer.appendChild(btn);
     ui.intervalSelectorContainer.appendChild(content);
-    lucide.createIcons({
-        attrs: {
-            'stroke-width': 1.75,
-        },
-    });
+    lucide.createIcons({ attrs: { 'stroke-width': 1.75 } });
 }
 
 export function updatePairHeader() {
@@ -175,14 +156,14 @@ export function updateActiveIndicatorTags() {
     [...activeOverlays, activePaneIndicator].filter(Boolean).forEach(indicator => {
         const tag = document.createElement('div');
         tag.className = 'indicator-tag';
-        const settingsButton = indicator.definition.settings?.length > 0 ? `<button class="config-indicator-btn" data-id="${indicator.instanceId}" title="Ayarlar"><i data-lucide="settings-2" style="pointer-events: none;"></i></button>` : '';
+        const settingsButton = indicator.definition.settings?.length > 0 ? `<button class="config-indicator-btn" data-id="${indicator.instanceId}" title="Ayarlar"><i data-lucide="settings-2" style="pointer-events: none; width: 14px; height: 14px;"></i></button>` : '';
         const settingsText = Object.values(indicator.settings).join(', ');
-        tag.innerHTML = `<span>${indicator.definition.name} ${settingsText ? `(${settingsText})` : ''}</span>${settingsButton}<button class="remove-indicator-btn" data-id="${indicator.instanceId}" title="Kaldır"><i data-lucide="x" style="pointer-events: none;"></i></button>`;
+        tag.innerHTML = `<span>${indicator.definition.name} ${settingsText ? `(${settingsText})` : ''}</span>${settingsButton}<button class="remove-indicator-btn" data-id="${indicator.instanceId}" title="Kaldır"><i data-lucide="x" style="pointer-events: none; width: 14px; height: 14px;"></i></button>`;
         ui.activeIndicatorsList.appendChild(tag);
     });
     ui.activeIndicatorsList.querySelectorAll('.remove-indicator-btn').forEach(btn => btn.addEventListener('click', (e) => handleRemoveIndicator(e.currentTarget.dataset.id)));
     ui.activeIndicatorsList.querySelectorAll('.config-indicator-btn').forEach(btn => btn.addEventListener('click', (e) => openSettingsModal(e.currentTarget.dataset.id)));
-    lucide.createIcons();
+    lucide.createIcons({ attrs: { 'stroke-width': 1.75 } });
 }
 
 export function updateWatchlist(tickerData) {

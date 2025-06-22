@@ -1,6 +1,4 @@
 // project/static/js/app.js
-// Bu dosya, frontend uygulamasının ana giriş noktasıdır.
-
 import { initializeUI, showLoader, hideLoader, updateWatchlist, updateActiveIndicatorTags, updatePairHeader } from './ui.js';
 import { initializeCharts, updateAllCharts, updateLiveCharts } from './chart.js';
 import { getState, setSymbol, setInterval as setStateInterval, getWatchlistSymbols, updateLastKlineData } from './state.js';
@@ -20,20 +18,15 @@ async function loadChartData(symbol, interval, resetZoom = false) {
     }
 }
 
-// --- ANA DÜZELTME: GÜNCELLEME KONTROL FONKSİYONLARI ---
-
-// Canlı güncellemeleri durduran fonksiyon.
 function stopDynamicUpdates() {
     if (dynamicUpdateIntervalId) {
         clearInterval(dynamicUpdateIntervalId);
         dynamicUpdateIntervalId = null;
-        console.log("Live updates stopped by user interaction.");
     }
 }
 
-// Canlı güncellemeleri başlatan (veya yeniden başlatan) fonksiyon.
 function startDynamicUpdates() {
-    stopDynamicUpdates(); // Önceki döngüyü her zaman temizle
+    stopDynamicUpdates(); 
 
     const updateTick = async () => {
         const { currentSymbol, currentInterval } = getState();
@@ -47,7 +40,6 @@ function startDynamicUpdates() {
         }
     };
     
-    console.log("Live updates started.");
     dynamicUpdateIntervalId = setInterval(updateTick, 3000);
 }
 
@@ -69,13 +61,11 @@ function init() {
             setSymbol(newSymbol);
             updatePairHeader();
             const { currentInterval } = getState();
-            // Sembol değiştiğinde zoom'u koru ve güncellemeleri yeniden başlat.
             loadChartData(newSymbol, currentInterval, false).then(startDynamicUpdates);
         },
         onIntervalChange: (newInterval) => {
             setStateInterval(newInterval);
             const { currentSymbol } = getState();
-            // Zaman aralığı değiştiğinde zoom'u sıfırla ve güncellemeleri yeniden başlat.
             loadChartData(currentSymbol, newInterval, true).then(startDynamicUpdates);
         },
         onIndicatorChange: () => {
@@ -84,7 +74,6 @@ function init() {
         }
     });
 
-    // Güncelleme kontrol fonksiyonlarını chart.js'e gönder.
     initializeCharts({ stopUpdates: stopDynamicUpdates, startUpdates: startDynamicUpdates });
 
     const { currentSymbol, currentInterval } = getState();

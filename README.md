@@ -1,160 +1,84 @@
-# 📊 TradingOptimizer Pro
-
-![TradingOptimizer Pro Interface](https://i.imgur.com/your-screenshot-url.png)
-
-**TradingOptimizer Pro** is an advanced financial analysis and charting platform developed using modern web technologies for the cryptocurrency markets. It helps users test and improve their trading strategies by providing detailed and interactive candlestick charts with various technical indicators.
-
-Built upon a solid and scalable foundation using a **Flask**-based Python backend and a modular **JavaScript** frontend.
-
----
-
-## ✨ Key Features
-
-* **Interactive Candlestick Charts**: Smooth, zoomable, and scrollable charts rendered with ApexCharts.
-* **Extensive Technical Indicator Support**:
-
-  * **Overlay**: EMA (Exponential Moving Average), Bollinger Bands.
-  * **Pane (Sub-chart)**: RSI (Relative Strength Index), MACD, Volume.
-* **Customizable Indicators**: All indicators have adjustable settings like period and length in real time.
-* **Modular & Extensible Architecture**: New indicators or features can be easily integrated thanks to the modular design.
-* **Background Data Synchronization**: Market data is periodically fetched from Binance API and stored locally without affecting the user experience.
-* **Live Watchlist**: Real-time prices and 24-hour change percentages are displayed for all supported symbols.
-
----
-
-## 🛠️ Technologies Used
-
-### Backend
-
-* **Python 3**
-* **Flask** – Lightweight and flexible web framework
-* **Flask-APScheduler** – For background jobs and periodic tasks
-* **SQLite** – Simple serverless database for development
-* **Requests** – For sending HTTP requests to Binance API
-
-### Frontend
-
-* **Vanilla JavaScript (ES6+ Modules)**
-* **ApexCharts.js** – Interactive charting library
-* **Lucide Icons** – Modern and clean icon set
-* **HTML5 & CSS3** – Responsive and modern interface
-
----
-
-## 🏗️ Project Architecture
-
-The application consists of three main components: **Frontend**, **Backend**, and **Scheduler**. The interaction between components is shown below:
-
-```mermaid
+📊 TradingOptimizer Pro
+TradingOptimizer Pro, kripto para piyasaları için modern web teknolojileri kullanılarak geliştirilmiş gelişmiş bir finansal analiz ve grafik platformudur. Kullanıcıların, çeşitli teknik göstergelerle donatılmış ayrıntılı ve etkileşimli mum grafikleri sağlayarak ticaret stratejilerini test etmelerine ve geliştirmelerine yardımcı olur.
+Flask tabanlı bir Python arka ucu ve modüler bir JavaScript ön ucu kullanılarak sağlam ve ölçeklenebilir bir temel üzerine inşa edilmiştir.
+✨ Temel Özellikler
+Etkileşimli Mum Grafikleri: ApexCharts ile oluşturulmuş, akıcı, yakınlaştırılabilir ve kaydırılabilir grafikler.
+Geniş Teknik Gösterge Desteği: EMA, Bollinger Bantları, RSI, MACD, Hacim ve daha fazlası.
+Özelleştirilebilir Göstergeler: Tüm göstergeler, periyot ve uzunluk gibi ayarlara gerçek zamanlı olarak sahiptir.
+Veritabanı Merkezli Mimari: Tüm grafik verileri, hızlı ve tutarlı bir deneyim için yerel SQLite veritabanından sunulur.
+Otomatik Veri Senkronizasyonu: Arka planda çalışan zamanlayıcı, piyasa verilerini periyodik olarak Binance API'sinden çeker ve yerel veritabanını güncel tutar.
+🏗️ Veri Akış Mimarisi
+Uygulama, veritabanı merkezli bir yaklaşımla çalışır. Kullanıcı arayüzüne sunulan veriler her zaman yerel veritabanından gelir. Harici API'ler yalnızca bu veritabanını doldurmak ve güncellemek için kullanılır.
 graph TD
-    subgraph User Interface
-        A[Frontend - JS/HTML/CSS]
+    subgraph "Kurulum (Tek Seferlik)"
+        U[Kullanıcı] -- "flask fetch-data" --> C[Flask CLI]
+        C --> DF1[data_fetcher.py]
+        DF1 -- "Tarihsel Veri İsteği" --> BA[Binance API]
+        BA --> DF1
+        DF1 -- "Toplu Kayıt" --> DB[(SQLite Veritabanı)]
     end
 
-    subgraph Server
-        B[Flask API]
-        C[SQLite Database]
-        D[APScheduler]
+    subgraph "Periyodik Güncelleme (Arka Plan)"
+        S[APScheduler] -- "Her 1-60dk'da bir tetikler" --> J[Senkronizasyon Görevi]
+        J --> DF2[data_fetcher.py]
+        DF2 -- "Sadece Yeni Verileri İste" --> BA
+        BA --> DF2
+        DF2 -- "Yeni Verileri Ekle" --> DB
     end
 
-    subgraph External Service
-        E[Binance API]
+    subgraph "Kullanıcı Etkileşimi (Grafik Yükleme)"
+        FE[Frontend] -- "GET /api/klines" --> API[Flask API]
+        API -- "SELECT * FROM klines" --> DB
+        DB -- "Kline Verileri" --> API
+        API -- "JSON Yanıtı" --> FE
     end
 
-    A -- "HTTP API Requests (e.g. /api/data)" --> B
-    B -- "Data Read (SELECT)" --> C
-    C -- "Return Data" --> B
-    B -- "JSON Response" --> A
+    style DB fill:#cde,stroke:#333,stroke-width:2px
 
-    D -- "Triggers Periodically" --> F{sync_all_data_job}
-    F -- "Fetch Request" --> E
-    E -- "Kline Data" --> F
-    F -- "Write to DB (INSERT/UPDATE)" --> C
 
-    style A fill:#f9f,stroke:#333,stroke-width:2px
-    style B fill:#bbf,stroke:#333,stroke-width:2px
-    style E fill:#ffc,stroke:#333,stroke-width:2px
-```
-
----
-
-## 🔄 Data Flow Example: Chart Loading
-
-```mermaid
-sequenceDiagram
-    participant User (Browser)
-    participant Flask API
-    participant SQLite DB
-
-    User (Browser)->>+Flask API: GET /api/data?symbol=BTCUSDT&interval=1h
-    Flask API->>+SQLite DB: SELECT * FROM klines WHERE symbol='BTCUSDT'...
-    SQLite DB-->>-Flask API: Return candlestick data
-    Flask API-->>-User (Browser): Respond with JSON data
-```
-
----
-
-## 🚀 Setup & Run
-
-Follow the steps below to run this project locally.
-
-### Requirements
-
-* Python 3.8+
-* pip and venv
-
-### Steps
-
-```bash
-# Clone the repository
-git clone https://github.com/onur-karakus/tradingoptimizer.git
+🛠️ Kullanılan Teknolojiler
+Arka Uç (Backend)
+Python 3
+Flask – Esnek ve hafif web çatısı
+Flask-APScheduler – Arka plan işleri ve periyodik görevler için
+Flask-SQLAlchemy - ORM ile veritabanı yönetimi
+SQLite – Geliştirme için sunucusuz veritabanı
+Requests – Binance API'sine HTTP istekleri göndermek için
+Ön Uç (Frontend)
+Vanilla JavaScript (ES6+ Modülleri)
+ApexCharts.js – Etkileşimli grafik kütüphanesi
+Lucide Icons – Modern ve temiz ikon seti
+HTML5 & CSS3 – Duyarlı ve modern arayüz
+🚀 Kurulum ve Çalıştırma
+Bu projeyi yerel olarak çalıştırmak için aşağıdaki adımları izleyin.
+Gereksinimler
+Python 3.8+
+pip ve venv
+Adımlar
+# Depoyu klonlayın
+git clone [https://github.com/onur-karakus/tradingoptimizer.git](https://github.com/onur-karakus/tradingoptimizer.git)
 cd tradingoptimizer
 
-# Create and activate virtual environment
+# Sanal ortam oluşturun ve etkinleştirin
 python -m venv venv
 source venv/bin/activate      # macOS/Linux
 # venv\Scripts\activate       # Windows
 
-# Install dependencies
+# Bağımlılıkları yükleyin
 pip install -r requirements.txt
 
-# Initialize the database
-flask init-db
+# 1. Adım: Tarihsel veriyi çekin
+# Bu komut, tüm desteklenen pariteler için veritabanını doldurur.
+flask fetch-data
 
-# Fetch historical data
-python data_fetcher.py
-
-# Run the app
+# 2. Adım: Uygulamayı çalıştırın
+# Bu komut web sunucusunu ve arka plan güncelleyiciyi başlatır.
 python run.py
-```
 
-Visit: [http://127.0.0.1:5000](http://127.0.0.1:5000)
 
----
-
-## 🗺️ Future Development (Roadmap)
-
-```mermaid
-gantt
-    title TradingOptimizer Pro Roadmap
-    dateFormat  YYYY-MM-DD
-    section Core Enhancements
-    Add More Indicators       :done,    des1, 2025-06-21, 14d
-    Drawing Tools for Users   :active,  des2, after des1, 21d
-
-    section Advanced Features
-    WebSocket Live Data Feed  :         des3, after des2, 14d
-    User Accounts & Watchlists:        des4, after des3, 21d
-    Backtesting Module        :         des5, after des4, 30d
-```
-
-Feel free to open an issue or submit a pull request. Contributions are welcome!
-
----
-
-## 📜 License
-
-This project is licensed under the **MIT License**. See the `LICENSE` file for more details.
-
----
-
+Tarayıcınızda http://127.0.0.1:5000 adresini ziyaret edin.
+🗺️ Gelecek Geliştirmeler (Yol Haritası)
+Kullanıcılar için çizim araçları (trend çizgileri, fibonacci vb.)
+WebSocket ile canlı veri akışı entegrasyonu
+Kullanıcı hesapları ve kişisel izleme listeleri
+Strateji testleri için Backtesting modülü

@@ -1,3 +1,4 @@
+<!-- project/templates/index.html -->
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -35,12 +36,9 @@
                 <div id="active-indicators-list"></div>
             </div>
             
-            <div id="chart-container">
-                <!-- ANA DÜZELTME: Eksik olan loader elementi geri eklendi. -->
+            <div id="chart-container" class="pane-inactive">
                 <div id="loader"></div>
-                <!-- Ana grafik (1. satır) -->
                 <div id="main-chart"></div>
-                <!-- İkincil grafik (2. satır) -->
                 <div id="secondary-chart-container"></div>
             </div>
         </div>
@@ -56,7 +54,8 @@
         <div class="modal-content">
             <div class="modal-header"><h4>Göstergeler</h4><button class="close-modal-btn"><i data-lucide="x"></i></button></div>
             <div class="modal-body">
-                <input type="text" id="indicator-search" placeholder="Gösterge ara..."><ul id="indicators-list"></ul>
+                <!-- DÜZELTME: Erişilebilirlik için aria-label eklendi. -->
+                <input type="text" id="indicator-search" placeholder="Gösterge ara..." aria-label="Gösterge arama"><ul id="indicators-list"></ul>
             </div>
         </div>
     </div>
@@ -64,7 +63,8 @@
          <div class="modal-content">
             <div class="modal-header"><h4>Sembol Ara</h4><button class="close-modal-btn"><i data-lucide="x"></i></button></div>
             <div class="modal-body">
-                <input type="text" id="symbol-search-input" placeholder="Sembol ara (örn: ETHUSDT)"><ul id="symbols-list"></ul>
+                <!-- DÜZELTME: Erişilebilirlik için aria-label eklendi. -->
+                <input type="text" id="symbol-search-input" placeholder="Sembol ara (örn: ETHUSDT)" aria-label="Sembol arama"><ul id="symbols-list"></ul>
             </div>
         </div>
     </div>

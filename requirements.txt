@@ -6,3 +6,4 @@
 Flask
 requests
 Flask-APScheduler
+Flask-SQLAlchemy

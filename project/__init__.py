@@ -1,41 +1,59 @@
 # project/__init__.py
+import os
 from flask import Flask
+from .extensions import db
 from .config import Config
-from .db import db
+from .main.routes import main as main_blueprint
+from .api.routes import api as api_blueprint
 from .scheduler import scheduler
+import data_fetcher
 
 def create_app(config_class=Config):
     """
-    Uygulama fabrikası fonksiyonu. 
-    Döngüsel içe aktarmaları önlemek için Blueprint ve model import'ları bu fonksiyonun içine taşındı.
+    Application factory, used to create and configure the Flask application.
     """
-    app = Flask(__name__)
+    app = Flask(__name__, instance_relative_config=True)
     app.config.from_object(config_class)
+    
+    try:
+        os.makedirs(app.instance_path)
+    except OSError:
+        pass
 
-    # Veritabanını ve diğer eklentileri uygulama ile başlatır.
     db.init_app(app)
-
-    # --- Döngüsel Import Düzeltmesi ---
-    # Blueprint'ler ve diğer parçalar, uygulama nesnesi (app) ve db nesnesi
-    # oluşturulduktan SONRA içeri aktarılır.
-    from .main.routes import main
-    from .api.routes import api
- 
-    # Blueprint'leri uygulamaya kaydeder.
-    app.register_blueprint(main)
-    app.register_blueprint(api, url_prefix='/api')
-
-    # Uygulama bağlamında (application context) veritabanı tablolarını oluşturur.
-    with app.app_context():
-        # Hatanın çözümü: 'models' modülü, döngüye girmemesi için
-        # uygulama ve veritabanı tamamen hazır olduktan sonra,
-        # ancak tablolara ihtiyaç duyulmadan hemen önce burada içeri aktarılır.
-        from . import models
-        db.create_all()
-
-    # Zamanlayıcıyı (scheduler) başlatır.
+    
     if not scheduler.running:
-        scheduler.init_app(app)
-        scheduler.start()
+      scheduler.init_app(app)
+      scheduler.start()
+
+    app.register_blueprint(main_blueprint)
+    app.register_blueprint(api_blueprint, url_prefix='/api')
+
+    with app.app_context():
+        from . import models
+
+        @app.cli.command("init-db")
+        def init_db_command():
+            """Mevcut veritabanını siler ve tabloları yeniden oluşturur."""
+            db_uri = app.config.get('SQLALCHEMY_DATABASE_URI')
+            if db_uri and db_uri.startswith("sqlite:///"):
+                db_path = db_uri.split('sqlite:///')[1]
+                if os.path.exists(db_path):
+                    print(f"Mevcut veritabanı siliniyor: {db_path}")
+                    os.remove(db_path)
+                else:
+                    print("Silinecek veritabanı dosyası bulunamadı, yine de devam ediliyor.")
+            
+            print("Tablolar yeniden oluşturuluyor...")
+            db.create_all()
+            print("Veritabanı başarıyla sıfırlandı ve tablolar oluşturuldu.")
+
+
+        @app.cli.command("fetch-data")
+        def fetch_all_data_command():
+            """Tüm desteklenen semboller ve aralıklar için tarihsel verileri çeker."""
+            print("Tarihsel veriler çekiliyor...")
+            data_fetcher.run_full_fetch()
+            print("Veri çekme işlemi tamamlandı.")
 
     return app

@@ -48,27 +48,29 @@ body {
 .indicator-tag .config-indicator-btn:hover { color: var(--accent-primary); }
 .indicator-tag .remove-indicator-btn:hover { color: var(--accent-secondary); }
 
-/* --- ANA DÜZELTME: KIRILMAZ GRAFİK DÜZENİ (CSS GRID) --- */
-#chart-container { 
-    flex-grow: 1;
-    display: grid;
-    /* 2 satır oluştur: üstteki 4 birim, alttaki 1 birim yükseklikte olsun. */
-    /* Bu, yaklaşık %80 / %20 oranını sabitler. */
-    grid-template-rows: 4fr 1fr; 
-    gap: 8px; /* Grafikler arasına boşluk koy */
-    min-height: 0; /* Flexbox içindeki grid'in taşmasını engeller */
-}
-#main-chart, #secondary-chart-container {
-    /* Grafiklerin kendi grid alanlarını tamamen doldurmasını sağla */
+#chart-container {
     position: relative;
-    width: 100%;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+#main-chart {
     height: 100%;
-    min-height: 0; /* Taşmayı önle */
+    transition: height 0.3s ease-in-out;
 }
 #secondary-chart-container {
-    border-top: 1px solid var(--border-color);
+    height: 0;
+    flex-shrink: 0;
+    transition: height 0.3s ease-in-out;
+    border-top: 1px solid transparent;
 }
-
+#chart-container.pane-active #main-chart {
+    height: 70%;
+}
+#chart-container.pane-active #secondary-chart-container {
+    height: 30%;
+    border-top-color: var(--border-color);
+}
 
 #loader { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 6px solid var(--bg-tertiary); border-top: 6px solid var(--accent-primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; z-index: 10; display: none; }
 @keyframes spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }

@@ -1,11 +1,9 @@
 // project/static/js/chart.js
-// Bu modül, ApexCharts grafiklerinin oluşturulması ve güncellenmesinden sorumludur.
-
 import { getState, setKlineData } from './state.js';
 
 let mainChart, secondaryChart;
+let chartCallbacks = {};
 
-// Ana grafik için temel yapılandırma
 const mainChartOptions = {
     series: [],
     chart: {
@@ -16,6 +14,17 @@ const mainChartOptions = {
         background: 'transparent',
         animations: { enabled: false },
         toolbar: { show: true, tools: { download: false, selection: true, zoom: true, zoomin: true, zoomout: true, pan: true, reset: true } },
+        events: {
+            zoomed: (chartContext, { xaxis }) => {
+                chartCallbacks.stopUpdates();
+            },
+            panned: (chartContext, { xaxis }) => {
+                chartCallbacks.stopUpdates();
+            },
+            reset: () => {
+                chartCallbacks.startUpdates();
+            }
+        },
         zoom: { enabled: true, type: 'x', autoScaleYaxis: true }
     },
     xaxis: { type: 'datetime', labels: { style: { colors: 'var(--text-secondary)' } } },
@@ -25,7 +34,6 @@ const mainChartOptions = {
     grid: { borderColor: 'var(--border-color)', strokeDashArray: 4 },
 };
 
-// Alt grafik için temel yapılandırma
 const secondaryChartOptions = {
     series: [],
     chart: {
@@ -43,25 +51,20 @@ const secondaryChartOptions = {
     grid: { borderColor: 'var(--border-color)', strokeDashArray: 4 }
 };
 
-export function initializeCharts() {
+export function initializeCharts(callbacks) {
+    chartCallbacks = callbacks;
     mainChart = new ApexCharts(document.getElementById('main-chart'), mainChartOptions);
     secondaryChart = new ApexCharts(document.getElementById('secondary-chart-container'), secondaryChartOptions);
     mainChart.render();
     secondaryChart.render();
 }
 
-/**
- * Mevcut state'e göre ana ve alt grafikler için tüm serileri (mumlar + göstergeler) hesaplar.
- */
 function calculateAllSeries() {
     const { klineData, activeOverlays, activePaneIndicator } = getState();
     const chartContainer = document.getElementById('chart-container');
     
     const isPaneActive = !!activePaneIndicator;
-    if (isPaneActive !== chartContainer.classList.contains('pane-active')) {
-        chartContainer.classList.toggle('pane-active', isPaneActive);
-        setTimeout(() => window.dispatchEvent(new Event('resize')), 250);
-    }
+    chartContainer.classList.toggle('pane-active', isPaneActive);
 
     if (!klineData || klineData.length === 0) {
         return { mainSeries: [], secondarySeries: [] };
@@ -83,9 +86,6 @@ function calculateAllSeries() {
     return { mainSeries, secondarySeries };
 }
 
-/**
- * Grafikteki son fiyat etiketini (annotation) oluşturur veya günceller.
- */
 function updatePriceAnnotation() {
     const { klineData } = getState();
     if (!klineData || klineData.length < 1) return;
@@ -111,14 +111,7 @@ function updatePriceAnnotation() {
     });
 }
 
-
-/**
- * AĞIR GÜNCELLEME: Grafik seçeneklerini günceller ve zoom durumunu korur.
- * @param {Array|null} rawData - API'den gelen ham veri.
- * @param {boolean} resetZoom - True ise grafiğin zoom'unu sıfırlar.
- */
 export function updateAllCharts(rawData = null, resetZoom = false) {
-    // Güncellemeden önce mevcut zoom aralığını al.
     const minX = mainChart.w.globals.minX;
     const maxX = mainChart.w.globals.maxX;
     const isZoomedOrPanned = mainChart.w.globals.isZoomed || mainChart.w.globals.isPanned;
@@ -128,11 +121,8 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
     }
     const { mainSeries, secondarySeries } = calculateAllSeries();
     
-    // *** STABİLİTE DÜZELTMESİ: Sıçramayı önlemek için 'updateOptions' yerine 'updateSeries' kullan. ***
-    // Bu, tüm grafik yapısını yeniden çizmek yerine sadece veri yollarını günceller.
-    mainChart.updateSeries(mainSeries, false); // 'false' animasyonu engeller.
+    mainChart.updateSeries(mainSeries, false);
 
-    // Alt grafiği güncelle, bu kısım sıçrama için daha az kritik.
     const { activePaneIndicator } = getState();
     let secondaryOpts = { 
         series: secondarySeries, 
@@ -149,46 +139,27 @@ export function updateAllCharts(rawData = null, resetZoom = false) {
             secondaryOpts.yaxis.max = 100;
         } else if (indicatorId === 'volume' || indicatorId === 'macd') {
             secondaryOpts.chart.type = 'bar';
+        } else {
+             secondaryOpts.chart.type = 'line';
         }
     }
     secondaryChart.updateOptions(secondaryOpts, false, false);
     
     updatePriceAnnotation();
 
-    // Veri güncellendikten sonra, zoom durumunu manuel olarak yönet.
     if (resetZoom) {
-        // Eğer reset istenirse, tüm veri aralığına zoom yap.
-        const { klineData } = getState();
-        if (klineData && klineData.length > 0) {
-            mainChart.zoomX(klineData[0].x, klineData[klineData.length - 1].x);
-        }
+        mainChart.resetSeries(true, true);
+        chartCallbacks.startUpdates();
     } else if (isZoomedOrPanned) {
-        // Eğer bir zoom/pan durumu varsa, sıfırlanmasını önlemek için yeniden uygula.
         mainChart.zoomX(minX, maxX);
     }
-    // Eğer reset istenmemişse ve zoom/pan yapılmamışsa, bir şey yapma ve grafiğin otomatik ölçeklenmesine izin ver.
 }
 
-/**
- * HAFİF GÜNCELLEME: Serilerin verisini güncellerken hem zoom hem de pan pozisyonunu KORUR.
- */
 export function updateLiveCharts() {
-    const minX = mainChart.w.globals.minX;
-    const maxX = mainChart.w.globals.maxX;
-    const isZoomedOrPanned = mainChart.w.globals.isZoomed || mainChart.w.globals.isPanned;
-
     const { mainSeries, secondarySeries } = calculateAllSeries();
     
     mainChart.updateSeries(mainSeries, false);
     secondaryChart.updateSeries(secondarySeries, false);
 
     updatePriceAnnotation();
-    
-    // updateSeries genellikle zoom'u bozmaz, ancak bir güvenlik önlemi olarak
-    // veya senkronizasyon için zoomX'i burada tutmak mantıklıdır.
-    if (isZoomedOrPanned) {
-        setTimeout(() => {
-            mainChart.zoomX(minX, maxX);
-        }, 0);
-    }
 }
